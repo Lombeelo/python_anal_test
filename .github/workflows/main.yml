@@ -104,23 +104,6 @@ jobs:
     needs: [sast-semgrep, dast-zap, sca-trivy]
     steps:
       - uses: actions/checkout@v4
-      # - name: Download semgrep report
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: semgrep-report
-      #     path: .
-      # - name: Download zap report
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: zap-report
-      #     path: .
-      - name: Download trivy report
-        uses: actions/download-artifact@v4
-        with:
-          name: trivy-report
-          path: .
-      - name: Show reports
-        run: ls -la
       - name: Run security gate
         run: |
           python -m pip install --upgrade pip
