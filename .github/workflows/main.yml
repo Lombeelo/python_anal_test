@@ -47,9 +47,6 @@ jobs:
     name: DAST — OWASP ZAP
     runs-on: ubuntu-latest
     needs: test
-    services:
-      # optional use of docker-in-docker not required here; we'll run zap via docker
-      # no services block required if we run zap docker container directly
     steps:
       - uses: actions/checkout@v4
       - name: Start Django app in background
