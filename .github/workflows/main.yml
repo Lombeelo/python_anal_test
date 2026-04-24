@@ -97,7 +97,7 @@ jobs:
           path: ${{ env.TRIVY_OUTPUT }}
 
   security-gate:
-    name: Security Gate
+    name: Security Gatea
     runs-on: ubuntu-latest
     needs: [sast-semgrep, dast-zap, sca-trivy]
     steps:
