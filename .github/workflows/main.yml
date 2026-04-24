@@ -1,0 +1,129 @@
+name: Security CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  SEMGREP_OUTPUT: semgrep-report.json
+  ZAP_OUTPUT: zap-report.xml
+  TRIVY_OUTPUT: trivy-report.json
+  ZAP_PORT: 8090
+
+jobs:
+  test:
+    name: Django check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Django check
+        run: python manage.py check
+
+  sast-semgrep:
+    name: SAST — semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run semgrep
+        uses: returntocorp/semgrep-action@v2
+        with:
+          config: p/ci
+          output: ${{ env.SEMGREP_OUTPUT }}
+      - name: Upload semgrep report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: ${{ env.SEMGREP_OUTPUT }}
+
+  dast-zap:
+    name: DAST — OWASP ZAP
+    runs-on: ubuntu-latest
+    needs: test
+    services:
+      # optional use of docker-in-docker not required here; we'll run zap via docker
+      # no services block required if we run zap docker container directly
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Django app in background
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt waitress
+          nohup python manage.py runserver 0.0.0.0:8000 &>/tmp/django.log &
+          # wait for server
+          for i in {1..15}; do
+            if curl -sSf http://127.0.0.1:8000/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -sSf http://127.0.0.1:8000/
+      - name: Run ZAP baseline scan (docker image)
+        run: |
+          docker run --rm -v $(pwd):/zap/wrk/:Z owasp/zap2docker-stable \
+            /zap/zap-baseline.py -t http://host.docker.internal:8000 -r zap-report.html -J ${{ env.ZAP_OUTPUT }} || true
+      - name: Download zap report
+        run: ls -la && cat ${{ env.ZAP_OUTPUT }} || true
+      - name: Upload ZAP report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: ${{ env.ZAP_OUTPUT }},zap-report.html
+
+  sca-trivy:
+    name: SCA — Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: |
+          docker build -t gh-security-ci-demo:latest -f- . <<'DOCKERFILE'
+          FROM python:3.11-alpine
+          WORKDIR /app
+          COPY . /app
+          RUN pip install -r requirements.txt
+          CMD ["python","manage.py","runserver","0.0.0.0:8000"]
+          DOCKERFILE
+      - name: Run trivy scan on image
+        run: |
+          docker pull aquasec/trivy:latest || true
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $(pwd):/work -w /work aquasec/trivy:latest image --format json --output ${{ env.TRIVY_OUTPUT }} gh-security-ci-demo:latest || true
+      - name: Upload Trivy report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: ${{ env.TRIVY_OUTPUT }}
+
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    needs: [sast-semgrep, dast-zap, sca-trivy]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download semgrep report
+        uses: actions/download-artifact@v4
+        with:
+          name: semgrep-report
+          path: .
+      - name: Download zap report
+        uses: actions/download-artifact@v4
+        with:
+          name: zap-report
+          path: .
+      - name: Download trivy report
+        uses: actions/download-artifact@v4
+        with:
+          name: trivy-report
+          path: .
+      - name: Show reports
+        run: ls -la
+      - name: Run security gate
+        run: |
+          python -m pip install --upgrade pip
+          pip install jq
+          python3 security_gate.py --semgrep ${{ env.SEMGREP_OUTPUT }} --zap ${{ env.ZAP_OUTPUT }} --trivy ${{ env.TRIVY_OUTPUT }}
