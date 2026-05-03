@@ -62,7 +62,7 @@ jobs:
           curl -sSf http://127.0.0.1:8000/
       - name: Run ZAP baseline scan (docker image)
         run: |
-          docker run --rm -v $(pwd):/zap/wrk/:Z ghcr.io/zaproxy/zaproxy:stable \
+          docker run --rm -v $(pwd):/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable \
             /zap/zap-baseline.py -t http://host.docker.internal:8000 -r zap-report.html -J ${{ env.ZAP_OUTPUT }} || true
       - name: Download zap report
         run: ls -la && cat ${{ env.ZAP_OUTPUT }} || true
