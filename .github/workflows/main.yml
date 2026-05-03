@@ -65,6 +65,7 @@ jobs:
         with:
           target: 'http://127.0.0.1:8000'
           artifact_name: zap-output
+          allow_issue_writing: false
       - name: Download zap report
         run: ls -la && cat ${{ env.ZAP_OUTPUT }} || true
       - name: Upload ZAP report
