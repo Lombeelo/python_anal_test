@@ -65,7 +65,7 @@ jobs:
         run: |
           mkdir -p zap-output && chmod 777 zap-output
           docker run --rm -v $(pwd)/zap-output:/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable \
-            /zap/zap-baseline.py -t http://host.docker.internal:8000 -r /zap/wrk/zap-report.html -J /zap/wrk/zap_out.json || true
+            /zap/zap-baseline.py -t http://127.0.0.1:8000 -r /zap/wrk/zap-report.html -J /zap/wrk/zap_out.json || true
 
           ls -la zap-output
       - name: Download zap report
